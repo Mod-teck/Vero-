@@ -1,0 +1,170 @@
+# Dashboard Refactor — Implementation Plan
+
+## Background
+
+The existing Vero Admin has only an authentication flow and a placeholder dashboard showing admin info. This plan refactors `/dashboard` into a full operational dashboard with Orders, Inventory, and Sales & Expenses sections—all in Arabic—while preserving the current dark glassmorphism theme and security posture.
+
+---
+
+## Architecture Overview
+
+```
+MVC + Service Layer
+├── models/          — Mongoose schemas (Order, Inventory, Expense)
+├── services/        — Business logic / DB aggregations
+├── controllers/     — HTTP handlers (thin, delegate to services)
+├── routes/          — Express Router mounting
+├── middleware/      — Auth, validation, sanitization
+└── views/
+    ├── partials/    — Reusable EJS components
+    ├── dashboard/   — Dashboard page
+    ├── inventory/   — Inventory category page
+    └── analytics/   — Analytics page
+```
+
+---
+
+## Proposed Changes
+
+### Models
+
+#### [NEW] models/Order.js
+Mongoose schema: `status` (`pending_review` | `preparing` | `delivering` | `completed`), `items[]`, `totalAmount`, `createdAt`.
+
+#### [NEW] models/Inventory.js
+Mongoose schema: `category` (enum: `women` | `men` | `kids` | `perfumes` | `sports`), `subCategory` (string), `name`, `quantity`, `price`.
+
+#### [NEW] models/Expense.js
+Mongoose schema: `amount`, `description`, [date](file:///d:/programming/Vero-1/middleware/validation.js#27-61).
+
+---
+
+### Services
+
+#### [NEW] services/dashboardService.js
+- `getOrderStats()` — aggregation to count orders by status
+- `getInventoryCategories()` — returns list of categories with metadata
+- `getSalesStats()` — aggregation over completed orders by status + total revenue
+- `getExpensesTotal()` — sum of all expenses
+
+---
+
+### Controllers
+
+#### [MODIFY] controllers/adminAuthController.js
+Remove [getDashboard](file:///d:/programming/Vero-1/controllers/adminAuthController.js#63-74) (replaced by dedicated dashboardController).
+
+#### [NEW] controllers/dashboardController.js
+- [getDashboard(req, res, next)](file:///d:/programming/Vero-1/controllers/adminAuthController.js#63-74) — calls `dashboardService`, renders `dashboard/index`
+- `getInventoryCategory(req, res, next)` — validates `:category` param, renders `inventory/category`
+
+#### [NEW] controllers/analyticsController.js
+- `getAnalytics(req, res, next)` — calls `dashboardService.getSalesStats` + `getExpensesTotal`, renders `analytics/index`
+
+---
+
+### Routes
+
+#### [MODIFY] routes/adminAuth.js
+Remove the `/dashboard` GET route (moved to `routes/dashboard.js`).
+
+#### [NEW] routes/dashboard.js
+```
+GET /dashboard                          → verifyToken → dashboardController.getDashboard
+GET /inventory/:category                → verifyToken → dashboardController.getInventoryCategory
+GET /inventory/:category/:subCategory   → verifyToken → dashboardController.getInventorySubCategory
+```
+
+#### [NEW] routes/analytics.js
+```
+GET /analytics → verifyToken → analyticsController.getAnalytics
+```
+
+---
+
+### Middleware
+
+#### [MODIFY] middleware/validation.js
+Add `sanitizeParam(paramName)` helper: strips non-alphanumeric characters from URL params before they reach the controller (prevents NoSQL injection via route params).
+
+---
+
+### Views — Partials
+
+#### [NEW] views/partials/_statCard.ejs
+Accepts: `{ label, value, color? }`. Renders a glassmorphism stat card.
+
+#### [NEW] views/partials/_categoryCard.ejs
+Accepts: `{ label, href }`. Renders a clickable card navigating to the given href.
+
+---
+
+### Views — Pages
+
+#### [MODIFY] views/dashboard/index.ejs
+Full 2-column layout:
+- **Column 1 (Orders):** title "الطلبات", 4 stat cards (2×2 grid), "المزيد" button → `/analytics`
+- **Column 2 (Inventory):** title "المخزون", 5 category cards (2×2 + 1), each → `/inventory/:category`
+- **Column 3 (Sales):** Below the 2-col layout, full-width sales & expenses panel
+
+#### [NEW] views/inventory/category.ejs
+Grid of sub-category cards, each → `/inventory/:category/:subCategory`
+
+#### [NEW] views/analytics/index.ejs
+Full sales & expenses breakdown with amounts, profit calculation.
+
+---
+
+### CSS — public/css/style.css
+
+Additions (no modifications to existing rules):
+- `.dashboard-layout` — CSS Grid, 2-column, RTL-aware
+- `.dashboard-section` — glassmorphism panel
+- `.section-title` — Arabic section heading
+- `.stat-grid` — 2-column inner grid for stats
+- `.stat-card` — individual stat item
+- `.category-grid` — category card grid
+- `.category-card` — clickable category tile with hover animation
+- `.btn-more` — "المزيد" action button
+- `[dir=rtl]` and `html[lang=ar]` adjustments for RTL text
+
+---
+
+### server.js
+
+#### [MODIFY] server.js
+Register new routes:
+```js
+app.use('/', dashboardRoutes);
+app.use('/', analyticsRoutes);
+```
+
+---
+
+## Security Implementation
+
+| Threat | Mitigation |
+|---|---|
+| MongoDB Injection (query) | `express-mongo-sanitize` (already active) + Mongoose typed queries |
+| MongoDB Injection (params) | `sanitizeParam` middleware — strips `$`, `.`, special chars from route params |
+| HTML/XSS Injection | EJS `<%= %>` escapes all output; never use `<%-` for user data |
+| CSRF | `sameSite: 'strict'` on JWT cookie |
+| Brute Force | Rate limiter (already active on login) |
+| Sensitive Data Exposure | `Admin.toJSON()` already strips password |
+
+---
+
+## Verification Plan
+
+### Manual Browser Testing (start server with `npm run dev`)
+
+1. **Login** at `http://localhost:5000/` → verify redirect to `/dashboard`
+2. **Dashboard Layout** — verify 2-column layout with Orders + Inventory panels and the Sales section
+3. **Orders section** — stat cards show counts (0 initially), "المزيد" navigates to `/analytics`
+4. **Inventory section** — click "حريمي" → navigates to `/inventory/women`
+5. **Inventory Category page** — sub-category cards render; click one → `/inventory/women/dresses`
+6. **Analytics page** — renders all sales/expenses rows with amounts and profit
+7. **Security** — attempt `http://localhost:5000/inventory/$where` → server returns 400 or 404 (param sanitized)
+8. **Auth guard** — clear cookies, visit `/dashboard` → redirected to login
+
+### No automated tests exist in the project. A future enhancement would be adding Jest + Supertest tests for the new routes.

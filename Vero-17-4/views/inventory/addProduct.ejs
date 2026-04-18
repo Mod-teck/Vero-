@@ -1,0 +1,75 @@
+<%- include('../layouts/header', { title: title, description: description }) %>
+
+<main class="dashboard-container">
+  <div class="bg-orb bg-orb--1"></div>
+  <div class="bg-orb bg-orb--2"></div>
+
+  <div class="category-page" style="width: 100%; max-width: 800px; margin: 0 auto; position: relative; z-index: 1;">
+    <div class="category-header">
+      <nav class="breadcrumb">
+        <a href="/dashboard">لوحة التحكم</a>
+        <span>/</span>
+        <a href="/inventory/<%= category %>"><%= categoryLabel %></a>
+        <span>/</span>
+        <span>إضافة منتج</span>
+      </nav>
+      <h1>إضافة منتج في قسم: <%= categoryLabel %></h1>
+    </div>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="message-area error" style="display: block; margin-bottom: 20px; background: var(--error); color: white; padding: 12px; border-radius: 8px;">
+        <%= error %>
+      </div>
+    <% } %>
+
+    <section class="dashboard-section">
+      <form action="/inventory/<%= category %>/add?_csrf=<%= csrfToken %>" method="POST" enctype="multipart/form-data" id="addProductForm" style="display: flex; flex-direction: column; gap: 20px;">
+
+
+        <div class="form-group">
+          <label for="name" style="color: var(--gray-50); margin-bottom: 8px; display: block;">اسم المنتج *</label>
+          <input type="text" id="name" name="name" required style="width: 100%; padding: 12px; border-radius: 8px; background: var(--surface-light); border: 1px solid var(--surface-glass-border); color: white;" placeholder="أدخل اسم المنتج">
+        </div>
+
+        <div class="form-group">
+          <label for="description" style="color: var(--gray-50); margin-bottom: 8px; display: block;">الوصف *</label>
+          <textarea id="description" name="description" required rows="4" style="width: 100%; padding: 12px; border-radius: 8px; background: var(--surface-light); border: 1px solid var(--surface-glass-border); color: white;" placeholder="أدخل وصف المنتج"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label style="color: var(--gray-50); margin-bottom: 8px; display: block;">المقاسات والكمية (Sizes & Quantities)</label>
+          <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input type="text" id="sizeInput" style="flex: 1; padding: 12px; border-radius: 8px; background: var(--surface-light); border: 1px solid var(--surface-glass-border); color: white;" placeholder="أدخل المقاس (مثال: XL، 42)">
+            <input type="number" id="quantityInput" value=""  required style="width: 80px; padding: 12px; border-radius: 8px; background: var(--surface-light); border: 1px solid var(--surface-glass-border); color: white;" placeholder="الكمية">
+            <button type="button" id="addSizeBtn" style="background: var(--primary); color: white; padding: 0 20px; border-radius: 8px; border: none; cursor: pointer;">إضافة مقاس</button>
+          </div>
+          <div id="sizesContainer" style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <!-- Sizes will be added here -->
+          </div>
+          <input type="hidden" name="sizes" id="sizesHidden">
+        </div>
+
+        <div style="display: flex; gap: 20px;">
+          <div class="form-group" style="flex: 1;">
+            <label for="price" style="color: var(--gray-50); margin-bottom: 8px; display: block;">السعر *</label>
+            <input type="number" id="price" name="price" step="0.01" min="0" required style="width: 100%; padding: 12px; border-radius: 8px; background: var(--surface-light); border: 1px solid var(--surface-glass-border); color: white;" placeholder="0.00">
+          </div>
+          
+          <div class="form-group" style="flex: 1;">
+            <label for="discount" style="color: var(--gray-50); margin-bottom: 8px; display: block;">الخصم</label>
+            <input type="number" id="discount" name="discount" step="0.01" min="0" style="width: 100%; padding: 12px; border-radius: 8px; background: var(--surface-light); border: 1px solid var(--surface-glass-border); color: white;" placeholder="0.00 (اختياري)">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="images" style="color: var(--gray-50); margin-bottom: 8px; display: block;">الصور (أقصى حجم إجمالي 5MB)</label>
+          <input type="file" id="images" name="images" multiple accept="image/*" style="width: 100%; padding: 12px; border-radius: 8px; background: var(--surface-light); border: 1px solid var(--surface-glass-border); color: white; cursor: pointer;">
+        </div>
+
+        <button type="submit" id="submitBtn" style="background: var(--primary); color: white; border: none; padding: 16px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 20px; font-size: 1.1rem;">إضافة المنتج</button>
+      </form>
+    </section>
+  </div>
+<script src="/js/addProduct.js"></script>
+
+<%- include('../layouts/footer') %>
